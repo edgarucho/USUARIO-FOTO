@@ -342,6 +342,11 @@
   .evc-wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-20deg);font-family:'Montserrat';font-weight:800;font-size:9px;letter-spacing:.5px;color:rgba(255,255,255,.4);white-space:nowrap;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.5)}
   .evc-check{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:50%;background:var(--gold);color:#1c1b18;display:none;align-items:center;justify-content:center;font-weight:800;font-size:13px}
   .evc-item.sel .evc-check{display:flex}
+  .peli-modal{position:fixed;inset:0;background:rgba(6,5,4,.96);z-index:1200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px}
+  .peli-x{position:absolute;top:16px;right:18px;width:42px;height:42px;border-radius:50%;border:none;background:rgba(255,255,255,.92);color:#1c1b18;font-size:18px;cursor:pointer;z-index:2}
+  .peli-frame{width:100%;max-width:1100px;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  .peli-frame iframe{width:100%;height:100%;border:0;display:block}
+  .peli-hint{color:#a79c86;font-size:11.5px;text-align:center}
   .evc-modal{position:fixed;inset:0;background:rgba(8,7,6,.95);z-index:1000;display:flex;flex-direction:column;padding:14px;gap:12px}
   .evc-modal-top{display:flex;justify-content:flex-end}
   .evc-modal-x{width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:#1c1b18;font-size:18px;cursor:pointer}
@@ -988,6 +993,8 @@ async function onAction(e){
     case 'goEventoCli': go('eventoCli', code); break;
     case 'entregadoSalir': S.code=null; go('clientEntry'); break;
     case 'evcExit': await flushPrintSave(); go('clientView', S.code); break;
+    case 'verPeli': openPeliModal(el.getAttribute('data-vid')); break;
+    case 'compartirPeli': compartirPeli(el.getAttribute('data-url')); break;
     case 'evcDone': { await flushPrintSave(); var _cc=app._evcC; if(_cc){ _cc.printConfirmed=true; _cc.printConfirmedAt=_cc.printConfirmedAt||Date.now(); try{ await saveContract(_cc); LS.set('c:'+_cc.code,_cc); }catch(e){} } showWhatsDone('¡Listo!','Guardamos las fotos que elegiste para imprimir. Si quieres, avísanos por WhatsApp.', '¡Hola! 👋 Ya elegí las fotos que quiero imprimir.'+waNombreCod(_cc||{code:S.code})); } break;
     case 'evcOpen': app._evcFolder=Number(el.getAttribute('data-i')); renderEventoCli(); break;
     case 'evcBackList': await flushPrintSave(); app._evcFolder=null; renderEventoCli(); break;
@@ -1245,6 +1252,13 @@ function renderEventoCli(){
       <div class="eyebrow">Tu evento</div>
       <h2 class="page">${pb?'Elige fotos para tu photobook':'Fotos de tu evento'}</h2>
       <p class="sub" id="evcCounter">${evcCounterText()}</p>
+      ${(st.pelicula&&st.pelicula.videoId)?`
+      <div style="background:linear-gradient(160deg,#17140f,#100e0c);border:1px solid #2a2620;border-radius:14px;padding:18px 16px;margin-bottom:14px;text-align:center">
+        <div style="font-family:'Montserrat';font-weight:800;font-size:17px;color:#e6c877">🎬 Tu película</div>
+        <div style="font-size:12.5px;color:#a79c86;margin:5px 0 13px">La película de tu evento ya está lista. Mírala aquí o compártela.</div>
+        <button class="btn btn-gold" data-act="verPeli" data-vid="${esc(st.pelicula.videoId)}" style="box-sizing:border-box">▶ Ver la película</button>
+        ${st.folderUrl?`<button data-act="compartirPeli" data-url="${esc(st.folderUrl)}" style="width:100%;margin-top:9px;background:transparent;border:1px solid #3a352b;color:#e9e0cd;font-family:'Montserrat';font-weight:700;font-size:13.5px;padding:12px;border-radius:11px;cursor:pointer">🔗 Compartir / abrir mi carpeta</button>`:''}
+      </div>`:''}
       ${pb
         ? `<div style="background:#fbf3e3;border:1px solid #e6d3a8;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:#5c4a1e;line-height:1.5">📖 Tu paquete incluye <strong>photobook</strong>. Elige hasta <strong>${PB_MAXFOTOS} fotos</strong> y luego las acomodas en las hojas. Estas fotos son para tu álbum (no se entregan impresas sueltas).</div>
            <label style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px;cursor:pointer"><input type="checkbox" data-act="pbToggleSession" ${app._pbIncludeSession?'checked':''} style="width:18px;height:18px"><span style="font-size:13px">Incluir también <strong>fotos de mi sesión</strong> al inicio del photobook</span></label>`
@@ -1340,6 +1354,20 @@ function openEvcModal(id){
   document.body.appendChild(ov);
 }
 function evcToggle(id, el){ return evcTogglePick(id); }
+/* ---- Ver la película (reproductor de Google Drive) ---- */
+function openPeliModal(vid){
+  if(!vid) return;
+  var ov=document.createElement('div'); ov.className='peli-modal';
+  ov.innerHTML='<button class="peli-x" data-x aria-label="Cerrar">✕</button><div class="peli-frame"><iframe src="https://drive.google.com/file/d/'+vid+'/preview" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div><div class="peli-hint">Si no carga, revisa que el video esté compartido en Google Drive.</div>';
+  ov.querySelector('[data-x]').addEventListener('click', function(){ ov.remove(); });
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+function compartirPeli(url){
+  if(!url) return;
+  if(navigator.share){ navigator.share({title:'Mi película', text:'Aquí está mi película y mis fotos', url:url}).catch(function(){}); }
+  else { try{ navigator.clipboard.writeText(url); toast('Link copiado ✓'); }catch(e){ window.open(url,'_blank'); } }
+}
 
 /* ============ PHOTOBOOK: plantillas 10x16" (margen 0.5") ============ */
 var PB_MAXPAGES=20, PB_MAXFOTOS=150;
